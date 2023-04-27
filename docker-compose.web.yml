@@ -1,0 +1,76 @@
+version: "3.9"
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "5m"
+    max-file: "10"
+
+services:
+
+  # ======================================================================
+  # SFTP
+  # ======================================================================
+
+  sftp:
+    image: atmoz/sftp:alpine
+    container_name: sftp
+    restart: unless-stopped
+    volumes:
+      - lighttpd-1-htdocs:/home/$SFTP_USER/site-1
+      - lighttpd-2-htdocs:/home/$SFTP_USER/site-2
+    ports:
+      - "2222:22"
+    command: $SFTP_USER:$SFTP_PW:1000
+    logging: *default-logging
+
+  # ======================================================================
+  # Lighttpd - One instance per hosted website
+  # ======================================================================
+
+  lighttpd_site_1:
+    image: sebp/lighttpd
+    container_name: lighttpd-site-1
+    restart: unless-stopped
+    volumes:
+      - lighttpd-1-htdocs:/var/www/localhost/htdocs
+      - ./lighttpd:/etc/lighttpd
+    environment:
+      - VIRTUAL_HOST=$HOST_SITE_1
+      - LETSENCRYPT_HOST=$HOST_SITE_1
+    tty: true
+    labels:
+      - com.github.nginx-proxy.nginx-proxy.keepalive=4
+    logging: *default-logging
+    networks:
+      - proxy
+
+  lighttpd_site_2:
+    image: sebp/lighttpd
+    container_name: lighttpd-site-2
+    restart: unless-stopped
+    volumes:
+      - lighttpd-2-htdocs:/var/www/localhost/htdocs
+      - ./lighttpd:/etc/lighttpd
+    environment:
+      - VIRTUAL_HOST=$HOST_SITE_2
+      - LETSENCRYPT_HOST=$HOST_SITE_2
+    tty: true
+    labels:
+      - com.github.nginx-proxy.nginx-proxy.keepalive=4
+    logging: *default-logging
+    networks:
+      - proxy
+
+#  lighttpd_site_3:
+#    ...
+
+networks:
+  proxy:
+    external: true
+    name: nginx-proxy
+
+volumes:
+  lighttpd-1-htdocs:
+  lighttpd-2-htdocs:
+
